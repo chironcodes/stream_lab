@@ -1,0 +1,88 @@
+version: "2"
+services:
+  zookeeper:
+    image: bitnami/zookeeper:latest
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=YES
+    networks:
+      svc:
+        aliases:
+          - zookeeper
+  kafka:
+    image: bitnami/kafka:latest
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    expose:
+      - "9093"
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:9093,OUTSIDE://localhost:9092
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_LISTENERS: INSIDE://0.0.0.0:9093,OUTSIDE://0.0.0.0:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    volumes:
+      - "kafka_data:/bitnami"
+    networks:
+      svc:
+        aliases:
+          - kafka
+  nifi:
+    image: apache/nifi:1.12.0
+    container_name: nifi
+    ports:
+      - 9999:9999
+    environment:
+      - NIFI_WEB_HTTP_PORT=9999
+      - NIFI_CLUSTER_IS_NODE=false
+      - NIFI_CLUSTER_NODE_PROTOCOL_PORT=8082
+      - NIFI_ZK_CONNECT_STRING=zookeeper:2181
+    networks:
+      svc:
+        aliases:
+          - nifi
+          
+  flink-jobmanager:
+    container_name: flink-jobmanager
+    image: flink:1.13.5
+    hostname: jobmanager
+    ports:
+      - "8877:8081"
+      - "6123:6123"
+    command: jobmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=flink-jobm
+    networks:
+      svc:
+        aliases:
+          - flink-jobm
+
+  flink-taskmanager:
+    container_name: flink-taskmanager
+    image: flink:1.13.5
+    depends_on:
+      - flink-jobmanager
+    command: taskmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=flink-jobm
+    networks:
+      svc:
+        aliases:
+          - flink-taskm
+
+
+networks:
+  svc:
+    name: svc
+
+volumes:
+  zookeeper_data:
+    driver: local
+    name: zookeeper_data
+  kafka_data:
+    driver: local
+    name: kafka_data
